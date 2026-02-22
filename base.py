@@ -3,6 +3,29 @@ import sys              # Importa o módulo sys para interagir com o sistema, es
 import os               # Importa o módulo os para interagir com o sistema operacional (tamanho do terminal).
 import threading        # Importa o módulo threading para gerenciar a concorrência (screen_lock).
 import random           # Importa o módulo random (mantido do original, mas não usado neste modelo).
+import argparse         # Importa o módulo argparse para processar argumentos da linha de comando.
+from src.loaders import SpotifyLyricsLoader  # Importa o carregador de letras do Spotify.
+
+# --- ANÁLISE DE ARGUMENTOS DA LINHA DE COMANDO ---
+def parse_arguments():
+    """Processa e retorna os argumentos da linha de comando."""
+    parser = argparse.ArgumentParser(
+        description='Aplicação de animação de letras de músicas do Spotify',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Exemplos de uso:
+  python3 base.py                                    # Usa o arquivo padrão
+  python3 base.py --arquivo samples/oproprio/desligado.json
+  python3 base.py -f samples/outro_arquivo.json
+        '''
+    )
+    parser.add_argument(
+        '--arquivo', '-f',
+        type=str,
+        default='samples/oproprio/desligado.json',
+        help='Caminho para o arquivo JSON com as letras da música (padrão: samples/oproprio/desligado.json)'
+    )
+    return parser.parse_args()
 
 # --- CONSTANTES ANSI (Cores e Comandos para o Terminal) ---
 RESET = "\033[0m"       # Código ANSI para resetar toda a formatação (cor, negrito).
@@ -159,32 +182,43 @@ def cleanup_screen():
         sys.stdout.flush()                  # Garante a execução dos comandos.
 
 # ----------------------------------------------------------------------------------
-# --- DADOS DO CONTEÚDO (MODELO BASE) ---
+# --- CARREGAMENTO DE DADOS DO SPOTIFY (LETRAS E METADADOS) ---
 # ----------------------------------------------------------------------------------
-CONTENT_INFO = {
-    "title_lines": [
-        "Nome da Música ou Título do Poema" # Linha do título/nome da obra.
-    ],
-    "artist_lines": [
-        "Nome do Artista ou Autor"          # Linha do artista/autor.
-    ]
-}
+def initialize_lyrics_data(arquivo_letras):
+    """
+    Inicializa os dados de letras a partir de um arquivo especificado.
 
-# ##########################################################################
-# # LETRAS E TEMPOS (MODELO BASE)
-# ##########################################################################
-LYRICS_DATA = [
-    # Dicionário com tempo (segundos) e texto ("original").
-    {"time": 0.0, "original": "Esta é a primeira frase de exemplo do modelo."},
-    {"time": 4.5, "original": "O ritmo da animação é definido por estes tempos."},
-    {"time": 9.0, "original": "Adicione aqui as demais frases e seus respectivos tempos."},
-    # Exemplo de linha com destaque específico.
-    {"time": 15.0, "original": "Linhas com 'highlight': True podem ter uma cor diferente.", "highlight": True},
-    {"time": 20.0, "original": "Fim do trecho de exemplo."}
-]
-# ##########################################################################
+    Args:
+        arquivo_letras (str): Caminho para o arquivo JSON com as letras
 
-TOTAL_MUSIC_DURATION = 25.0 # Define a duração total para o loop de animação.
+    Returns:
+        tuple: (LYRICS_DATA, CONTENT_INFO, TOTAL_MUSIC_DURATION)
+    """
+    _lyrics_loader = SpotifyLyricsLoader(arquivo_letras)
+
+    # Carrega os dados do arquivo JSON do Spotify
+    if _lyrics_loader.load():
+        return (
+            _lyrics_loader.get_lyrics_data(),
+            _lyrics_loader.get_content_info(),
+            _lyrics_loader.get_total_duration()
+        )
+    else:
+        # Fallback para dados de exemplo se o carregamento falhar
+        print(f"Aviso: Não foi possível carregar o arquivo '{arquivo_letras}'. Usando dados de exemplo.")
+        content_info = {
+            "title_lines": ["Nome da Música ou Título do Poema"],
+            "artist_lines": ["Nome do Artista ou Autor"]
+        }
+        lyrics_data = [
+            {"time": 0.0, "original": "Esta é a primeira frase de exemplo do modelo."},
+            {"time": 4.5, "original": "O ritmo da animação é definido por estes tempos."},
+            {"time": 9.0, "original": "Adicione aqui as demais frases e seus respectivos tempos."},
+            {"time": 15.0, "original": "Linhas com 'highlight': True podem ter uma cor diferente.", "highlight": True},
+            {"time": 20.0, "original": "Fim do trecho de exemplo."}
+        ]
+        return (lyrics_data, content_info, 25.0)
+
 
 # --- FUNÇÃO PRINCIPAL PARA A ANIMAÇÃO ---
 def start_lyrics_animation():
@@ -264,6 +298,13 @@ def start_lyrics_animation():
 
 if __name__ == "__main__":
     try:
+        # Processa os argumentos da linha de comando
+        args = parse_arguments()
+
+        # Inicializa os dados de letras a partir do arquivo especificado
+        global LYRICS_DATA, CONTENT_INFO, TOTAL_MUSIC_DURATION
+        LYRICS_DATA, CONTENT_INFO, TOTAL_MUSIC_DURATION = initialize_lyrics_data(args.arquivo)
+
         start_lyrics_animation() # Inicia a função principal de animação.
         with screen_lock:
             sys.stdout.write(CLEAR_SCREEN)
